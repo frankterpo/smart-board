@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "goal": "Brand-neutral Kanban clone spec and scaffold",
+    "status": "starter-ready",
+    "notes": [
+      "No proprietary assets or code included.",
+      "Wireframe screenshots placeholder added; images can be exported manually if needed."
+    ]
+  },
+  "files": {
+    "design_spec": "clone/design_spec.md",
+    "event_map": "clone/event_map.md",
+    "architecture_report": "clone/architecture_report.md",
+    "wireframes_dir": "clone/wireframes/",
+    "starter_root": "clone/starter/"
+  },
+  "stack": {
+    "frontend": ["Next.js", "React", "TypeScript", "TailwindCSS"],
+    "state": ["Zustand"],
+    "drag_and_drop": ["@dnd-kit (planned)"]
+  },
+  "entities": ["Board", "List", "Card", "Checklist", "Label", "User"],
+  "events": ["card:created", "card:moved", "card:updated", "checklist:updated", "board:updated"]
+}

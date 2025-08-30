@@ -1,0 +1,8 @@
+{
+  "/api/settings/route": "app/api/settings/route.js",
+  "/api/dust/ensure/route": "app/api/dust/ensure/route.js",
+  "/api/card-memory/route": "app/api/card-memory/route.js",
+  "/api/card-apps/route": "app/api/card-apps/route.js",
+  "/page": "app/page.js",
+  "/api/aci/suggest/route": "app/api/aci/suggest/route.js"
+}
