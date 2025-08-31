@@ -9,11 +9,16 @@ function getOpenAI(over?: Overrides) {
 }
 
 function getDust(over?: Overrides) {
-  return new (DustAPI as any)({
-    apiKey: over?.dustKey || process.env.DUST_API_KEY!,
-    workspaceId: over?.dustWorkspaceId || process.env.DUST_WORKSPACE_ID!,
-    baseUrl: 'https://dust.tt'
-  });
+  return new DustAPI(
+    {
+      url: "https://dust.tt",
+    },
+    {
+      workspaceId: over?.dustWorkspaceId || process.env.DUST_WORKSPACE_ID!,
+      apiKey: over?.dustKey || process.env.DUST_API_KEY!,
+    },
+    console
+  );
 }
 
 export async function runOpenAIJob(cardId: string, prompt: string, over?: Overrides) {
