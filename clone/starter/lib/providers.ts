@@ -43,9 +43,12 @@ export async function runDustJob(cardId: string, spec: { instruction: string }, 
 		await logJob({ provider: 'dust', status: 'running', job_id: jobId, card_id: cardId });
 		const client = getDust(over);
 		// Example lightweight call; replace with your workflow
-		const res = await client.spaces.list();
-		await logJob({ provider: 'dust', status: 'succeeded', job_id: jobId, card_id: cardId, result: res });
-		return res;
+		const res = await client.getAgentConfigurations();
+		if (res.isErr()) {
+			throw new Error(`Dust API Error: ${res.error.message}`);
+		}
+		await logJob({ provider: 'dust', status: 'succeeded', job_id: jobId, card_id: cardId, result: res.value });
+		return res.value;
 	} catch (err) {
 		await logJob({ provider: 'dust', status: 'failed', job_id: jobId, card_id: cardId, result: { error: String(err) } });
 		throw err;
