@@ -9,7 +9,7 @@ function getOpenAI(over?: Overrides) {
 }
 
 function getDust(over?: Overrides) {
-  return new DustAPI({ apiKey: over?.dustKey || process.env.DUST_API_KEY!, workspaceId: over?.dustWorkspaceId || process.env.DUST_WORKSPACE_ID! });
+  return new DustAPI(over?.dustKey || process.env.DUST_API_KEY!, over?.dustWorkspaceId || process.env.DUST_WORKSPACE_ID!);
 }
 
 export async function runOpenAIJob(cardId: string, prompt: string, over?: Overrides) {
