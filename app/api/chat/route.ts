@@ -8,7 +8,7 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
-    const { cardId, message, provider, history } = await request.json();
+    const { cardId, message, provider, history, availableTools, cardContext } = await request.json();
 
     let response = '';
     let reasoning = '';
@@ -17,15 +17,30 @@ export async function POST(request: NextRequest) {
     switch (provider) {
       case 'openai':
         // Use OpenAI Chat Completions with reasoning
-        const systemPrompt = `You are a helpful AI assistant integrated into a task management system.
+        const systemPrompt = `You are a task optimization AI assistant integrated into a smart Kanban board.
 
-Your task is to:
-1. Understand the user's request and the task context
-2. Provide clear reasoning about how you understand the task
-3. Give a specific, actionable response
-4. If applicable, suggest next steps or related tasks
+Your role is to help users create, refine, and execute tasks effectively.
 
-Always include your reasoning process in your response, explaining how you analyzed the task and what approach you're taking.`;
+Current Task Context:
+- Title: "${cardContext?.title || 'No title'}"
+- Description: "${cardContext?.description || 'No description'}"
+- Available Tools: ${availableTools?.join(', ') || 'None'}
+
+Your capabilities:
+1. **Task Analysis**: Analyze tasks for clarity, specificity, and executability
+2. **Improvement Suggestions**: Suggest better titles, descriptions, or approaches
+3. **Tool Recommendations**: Recommend which tools would be most helpful
+4. **Execution Guidance**: Guide users through task completion
+5. **Change Proposals**: When suggesting changes, propose them clearly and ask for approval
+
+Guidelines:
+- Always provide reasoning for your suggestions
+- Be proactive in identifying potential improvements
+- Respect user approval for changes
+- Focus on making tasks more actionable and successful
+- Use available tools when relevant to the task
+
+If you have suggestions for improving the task, present them clearly with reasoning.`;
 
         const openaiMessages = [
           { role: 'system', content: systemPrompt },
@@ -44,6 +59,7 @@ Always include your reasoning process in your response, explaining how you analy
         });
 
         response = completion.choices[0]?.message?.content || 'No response generated';
+        let proposedChanges = {};
 
         // Extract reasoning if present, otherwise create a summary
         const responseParts = response.split('\n\n');
@@ -70,7 +86,49 @@ Reasoning:`;
           reasoning = reasoningCompletion.choices[0]?.message?.content || 'Analyzed the task and provided assistance.';
         }
 
-        metadata = { model: 'gpt-4', usage: completion.usage, reasoning };
+        // Check if the response contains suggestions for changes
+        const suggestionKeywords = ['suggest', 'recommend', 'improve', 'change', 'better'];
+        const hasSuggestions = suggestionKeywords.some(keyword =>
+          response.toLowerCase().includes(keyword)
+        );
+
+        if (hasSuggestions && (cardContext?.title || cardContext?.description)) {
+          // Generate specific improvement suggestions
+          const improvementPrompt = `Based on the following task and assistant response, suggest specific improvements to the title and/or description.
+
+Current Task:
+- Title: "${cardContext?.title || 'No title'}"
+- Description: "${cardContext?.description || 'No description'}"
+- Assistant Response: "${response}"
+
+If improvements are needed, respond with JSON:
+{
+  "title": "improved title or null",
+  "description": "improved description or null"
+}
+
+If no improvements needed, respond with: {}`;
+
+          try {
+            const improvementCompletion = await openai.chat.completions.create({
+              model: 'gpt-4',
+              messages: [{ role: 'user', content: improvementPrompt }],
+              max_tokens: 300,
+              temperature: 0.5,
+            });
+
+            const improvementResponse = improvementCompletion.choices[0]?.message?.content || '{}';
+            const improvements = JSON.parse(improvementResponse);
+
+            if (Object.keys(improvements).length > 0) {
+              proposedChanges = improvements;
+            }
+          } catch (error) {
+            console.log('Could not generate improvement suggestions:', error);
+          }
+        }
+
+        metadata = { model: 'gpt-4', usage: completion.usage, reasoning, proposedChanges };
         break;
 
       case 'dust':
@@ -104,7 +162,8 @@ Reasoning:`;
     return NextResponse.json({
       response,
       metadata,
-      provider
+      provider,
+      proposedChanges
     });
 
   } catch (error) {
