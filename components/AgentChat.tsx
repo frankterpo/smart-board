@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
+import { searchACITools } from '@/lib/aci';
 
 interface Message {
   id: string;
@@ -30,6 +31,9 @@ export default function AgentChat({ cardId }: AgentChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [availableTools, setAvailableTools] = useState<string[]>([]);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [aciAgent, setAciAgent] = useState<any>(null);
+  const [aciApps, setAciApps] = useState<any[]>([]);
+  const [showToolSelector, setShowToolSelector] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const card = useStore((s) => s.cards[cardId]);
   const updateCard = useStore((s) => s.updateCard);
@@ -56,6 +60,14 @@ export default function AgentChat({ cardId }: AgentChatProps) {
   useEffect(() => {
     loadAvailableTools();
   }, [cardId]);
+
+  // Initialize ACI agent for this card
+  useEffect(() => {
+    if (card) {
+      initializeACIAgent();
+      loadACITools();
+    }
+  }, [card]);
 
   const loadChatHistory = async () => {
     try {
@@ -292,6 +304,94 @@ export default function AgentChat({ cardId }: AgentChatProps) {
     );
   };
 
+  const initializeACIAgent = async () => {
+    try {
+      const response = await fetch('/api/aci/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardId,
+          title: card.title,
+          description: card.description
+        })
+      });
+
+      const data = await response.json();
+      if (data.agent) {
+        setAciAgent(data.agent);
+      }
+    } catch (error) {
+      console.error('Failed to initialize ACI agent:', error);
+    }
+  };
+
+  const loadACITools = async () => {
+    try {
+      // Search for relevant ACI tools based on card content
+      const intent = `${card.title} ${card.description || ''}`.trim();
+      const tools = await searchACITools(intent, undefined, 8);
+      setAciApps(tools);
+
+      // Get subscribed apps for this card
+      const response = await fetch(`/api/aci/apps?cardId=${cardId}`);
+      const data = await response.json();
+      if (data.apps) {
+        setAvailableTools(data.apps.map((app: any) => app.app_name));
+      }
+    } catch (error) {
+      console.error('Failed to load ACI tools:', error);
+    }
+  };
+
+  const subscribeToApp = async (appName: string) => {
+    try {
+      const response = await fetch('/api/aci/apps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardId,
+          appName,
+          securityScheme: 'API_KEY' // Default to API_KEY, user can change later
+        })
+      });
+
+      const data = await response.json();
+      if (data.app) {
+        setAvailableTools(prev => [...prev, appName]);
+        setAciApps(prev => prev.filter(app => app.app_name !== appName));
+      }
+    } catch (error) {
+      console.error('Failed to subscribe to app:', error);
+    }
+  };
+
+  const setupAppCredentials = async (appName: string) => {
+    try {
+      const apiKey = prompt(`Enter your API key for ${appName}:`);
+      if (!apiKey) return;
+
+      const response = await fetch('/api/aci/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardId,
+          appName,
+          securityScheme: 'API_KEY',
+          apiKey,
+          linkedAccountOwnerId: `user-${cardId}`
+        })
+      });
+
+      const data = await response.json();
+      if (data.account) {
+        alert(`✅ ${appName} credentials configured successfully!`);
+      }
+    } catch (error) {
+      console.error('Failed to setup app credentials:', error);
+      alert(`❌ Failed to configure ${appName} credentials`);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -299,40 +399,72 @@ export default function AgentChat({ cardId }: AgentChatProps) {
         <h3 className="font-semibold text-sm mb-2">Task Agent</h3>
         <p className="text-xs text-gray-600 mb-3">AI assistant to optimize and execute your task</p>
 
-        {/* Tool Selector */}
+        {/* ACI Agent Status */}
+        {aciAgent && (
+          <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-md">
+            <div className="flex items-center text-xs text-green-800">
+              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              ACI Agent Active
+            </div>
+          </div>
+        )}
+
+        {/* ACI Tools Management */}
         <div className="mb-3">
-          {availableTools.length > 0 ? (
-            <>
-              <p className="text-xs font-medium text-gray-700 mb-1">Available ACI Tools:</p>
-              <div className="flex flex-wrap gap-1">
-                {availableTools.slice(0, 8).map((tool) => (
-                  <button
-                    key={tool}
-                    onClick={() => toggleTool(tool)}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                      selectedTools.includes(tool)
-                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {tool}
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-              <div className="flex items-center text-yellow-800 text-xs">
-                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <span>
-                  <strong>ACI API Key Required:</strong> Please configure your ACI API key in admin settings to enable tool integration.
-                </span>
-              </div>
+          <button
+            onClick={() => setShowToolSelector(!showToolSelector)}
+            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors mb-2"
+          >
+            {showToolSelector ? 'Hide' : 'Show'} ACI Tools
+          </button>
+
+          {showToolSelector && (
+            <div className="space-y-2">
+              {/* Subscribed Apps */}
+              {availableTools.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">Subscribed Apps:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {availableTools.map((tool) => (
+                      <div key={tool} className="flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                        <span>{tool}</span>
+                        <button
+                          onClick={() => setupAppCredentials(tool)}
+                          className="ml-1 text-green-600 hover:text-green-800"
+                          title="Setup API Key"
+                        >
+                          🔑
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Available Apps to Subscribe */}
+              {aciApps.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">Available Apps:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {aciApps.slice(0, 6).map((app) => (
+                      <button
+                        key={app.app_name}
+                        onClick={() => subscribeToApp(app.app_name)}
+                        className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs hover:bg-gray-200 transition-colors"
+                        title={app.description || app.app_name}
+                      >
+                        + {app.app_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
+
       </div>
 
       {/* Messages */}

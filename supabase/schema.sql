@@ -112,3 +112,64 @@ create table if not exists public.settings (
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
+
+-- ACI Card Agents (each card gets its own ACI agent)
+create table if not exists public.aci_card_agents (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  agent_name text not null,
+  description text,
+  intent text, -- derived from card title/description
+  status text not null check (status in ('active','inactive','error')) default 'active',
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- ACI App Configurations (per card subscriptions)
+create table if not exists public.aci_app_configurations (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  app_name text not null,
+  app_category text,
+  security_scheme text not null check (security_scheme in ('API_KEY','OAUTH2','NO_AUTH')),
+  configuration jsonb, -- app-specific config
+  is_active boolean default true,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(card_id, app_name)
+);
+
+-- ACI Linked Accounts (user API keys for apps)
+create table if not exists public.aci_linked_accounts (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  app_name text not null,
+  linked_account_owner_id text not null, -- user identifier
+  security_scheme text not null check (security_scheme in ('API_KEY','OAUTH2','NO_AUTH')),
+  credentials jsonb, -- encrypted API keys/tokens
+  is_active boolean default true,
+  oauth_state text, -- for OAuth2 flows
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(card_id, app_name, linked_account_owner_id)
+);
+
+-- ACI Function Executions (track tool usage)
+create table if not exists public.aci_function_executions (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  function_name text not null,
+  app_name text,
+  arguments jsonb,
+  result jsonb,
+  success boolean,
+  error_message text,
+  execution_time_ms integer,
+  created_at timestamp with time zone default now()
+);
+
+-- Indexes for performance
+create index if not exists aci_card_agents_card_id_idx on public.aci_card_agents(card_id);
+create index if not exists aci_app_configurations_card_id_idx on public.aci_app_configurations(card_id);
+create index if not exists aci_linked_accounts_card_id_idx on public.aci_linked_accounts(card_id);
+create index if not exists aci_function_executions_card_id_idx on public.aci_function_executions(card_id);
