@@ -7,7 +7,7 @@ const Body = z.object({ boardId: z.string(), cardId: z.string().optional() });
 
 export async function POST(req: NextRequest) {
   const { boardId, cardId } = Body.parse(await req.json());
-  const client = new DustAPI({
+  const client = new (DustAPI as any)({
     apiKey: process.env.DUST_API_KEY!,
     workspaceId: process.env.DUST_WORKSPACE_ID!,
     baseUrl: 'https://dust.tt'
