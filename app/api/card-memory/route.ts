@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
       file: new Blob([text], { type: 'text/plain' }) as any,
       purpose: 'assistants',
     });
-    await client.vectorStores.files.createAndPoll({ vector_store_id: vectorStoreId, file_id: file.id } as any);
+    await (client.vectorStores.files as any).createAndPoll(vectorStoreId, file.id);
     return Response.json({ ok: true });
   }
 
   if (action === 'search') {
-    const results = await client.vectorStores.search({ vector_store_id: vectorStoreId, query: text ?? '' } as any);
+    const results = await (client.vectorStores as any).search(vectorStoreId, text ?? '');
     return Response.json({ ok: true, results });
   }
 

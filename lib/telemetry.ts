@@ -28,7 +28,9 @@ export function useSupabaseCardSync() {
         }
       }
     });
-    return unsub;
+    return () => {
+      unsub(); // Call the unsubscribe function
+    };
   }, [cards]);
 }
 

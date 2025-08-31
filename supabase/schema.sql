@@ -51,11 +51,54 @@ create table if not exists public.dust_datasources (
 create table if not exists public.card_apps (
   card_id text references public.cards(id) on delete cascade,
   provider text not null check (provider in ('dust','openai','aci')),
-  app_id text,
+  app_id text not null,
   config jsonb,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now(),
-  primary key (card_id, provider, coalesce(app_id,'_'))
+  primary key (card_id, provider, app_id)
+);
+
+-- Chat messages for agent conversations
+create table if not exists public.chat_messages (
+  id text primary key,
+  card_id text references public.cards(id) on delete cascade,
+  role text not null check (role in ('user','assistant')),
+  content text not null,
+  provider text not null check (provider in ('openai','dust','aci')),
+  timestamp timestamp with time zone default now(),
+  metadata jsonb default '{}'::jsonb,
+  reasoning text -- Agent's reasoning process for assistant messages
+);
+
+-- Chat interactions (for analytics and logging)
+create table if not exists public.chat_interactions (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  provider text not null,
+  user_message text not null,
+  assistant_response text not null,
+  metadata jsonb default '{}'::jsonb,
+  timestamp timestamp with time zone default now()
+);
+
+-- Voice transcripts and processing
+create table if not exists public.voice_transcripts (
+  id text primary key default gen_random_uuid()::text,
+  transcript text not null,
+  processed_tasks jsonb default '[]'::jsonb,
+  confidence real,
+  duration real,
+  timestamp timestamp with time zone default now()
+);
+
+-- Tool mentions and suggestions
+create table if not exists public.tool_mentions (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  tool_id text not null,
+  tool_type text not null check (tool_type in ('aci','dust')),
+  context text,
+  inserted_at timestamp with time zone default now()
 );
 
 -- Board-level settings (admin-only keys)
@@ -65,6 +108,7 @@ create table if not exists public.settings (
   dust_key text,
   dust_workspace_id text,
   aci_key text,
+  elevenlabs_key text, -- Add ElevenLabs API key
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );

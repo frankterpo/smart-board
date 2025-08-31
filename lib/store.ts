@@ -23,6 +23,7 @@ export interface Card {
 	position: number;
 	status?: 'idle' | 'queued' | 'running' | 'succeeded' | 'failed' | 'requiresAction';
 	provider?: 'openai' | 'dust' | 'aci';
+	isNew?: boolean; // Flag for newly created cards
 }
 
 export interface List {
@@ -51,7 +52,7 @@ interface StoreState {
 	setOnboardCard: (id: Id | undefined) => void;
 
 	createList: (title: string) => List;
-	createCard: (listId: Id, title: string) => Card;
+	createCard: (listId: Id, title: string, description?: string) => Card;
 	moveCard: (cardId: Id, toListId: Id, position: number) => void;
 	updateCard: (cardId: Id, changes: Partial<Card>) => void;
 	openModal: (cardId: Id) => void;
@@ -86,7 +87,7 @@ export const useStore = create<StoreState>()(
 				return get().lists[id];
 			},
 
-			createCard: (listId, title) => {
+			createCard: (listId, title, description) => {
 				const id = `c_${Math.random().toString(36).slice(2, 9)}`;
 				const list = get().lists[listId];
 				const position = list.cardIds.length;
@@ -94,17 +95,19 @@ export const useStore = create<StoreState>()(
 					id,
 					listId,
 					title,
+					description,
 					labels: [],
 					members: [],
 					checklists: [],
 					comments: [],
 					position,
+					isNew: true, // Mark as newly created
 				};
 				set((state) => ({
 					cards: { ...state.cards, [id]: card },
 					lists: { ...state.lists, [listId]: { ...list, cardIds: [...list.cardIds, id] } },
 				}));
-				queueMicrotask(() => eventBus.emit({ type: 'card:created', payload: { listId, cardId: id, title, position } } as any));
+				queueMicrotask(() => eventBus.emit({ type: 'card:created', payload: { listId, cardId: id, title, description, position } } as any));
 				return card;
 			},
 
@@ -166,6 +169,13 @@ export const useStore = create<StoreState>()(
 					return { cards: { ...state.cards, [cardId]: next } };
 				});
 				queueMicrotask(() => eventBus.emit({ type: 'card:updated', payload: { cardId, changes } } as any));
+			},
+
+			// Clear isNew flag after animation
+			markCardNotNew: (cardId: Id) => {
+				set((state) => ({
+					cards: { ...state.cards, [cardId]: { ...state.cards[cardId], isNew: false } }
+				}));
 			},
 
 			openModal: (cardId) => set({ modalCardId: cardId }),
