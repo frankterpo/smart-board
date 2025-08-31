@@ -80,11 +80,24 @@ export default function AgentChat({ cardId }: AgentChatProps) {
         body: JSON.stringify({ cardId })
       });
       const data = await response.json();
+
+      if (data.error) {
+        console.error('ACI API Error:', data.error);
+        // Show error message about missing ACI key
+        if (data.error.includes('ACI API key is required')) {
+          setAvailableTools([]);
+          // Could show a toast or error message here
+          console.warn('ACI key is required but not configured');
+        }
+        return;
+      }
+
       if (data.apps) {
         setAvailableTools(data.apps.map((app: any) => app.app_name));
       }
     } catch (error) {
       console.error('Failed to load available tools:', error);
+      setAvailableTools([]);
     }
   };
 
@@ -106,13 +119,18 @@ export default function AgentChat({ cardId }: AgentChatProps) {
 
       const data = await response.json();
 
+      let analysisContent = data.analysis;
+      if (data.error) {
+        analysisContent = `⚠️ **Configuration Required**: ${data.error}\n\nPlease add your ACI API key in the admin settings to enable tool integration and get better task optimization suggestions.`;
+      }
+
       const analysisMessage: Message = {
         id: `analysis-${Date.now()}`,
         role: 'assistant',
-        content: data.analysis,
+        content: analysisContent,
         provider: 'openai',
         timestamp: new Date().toISOString(),
-        type: 'analysis',
+        type: data.error ? 'regular' : 'analysis',
         proposedChanges: data.suggestedChanges
       };
 
@@ -282,26 +300,39 @@ export default function AgentChat({ cardId }: AgentChatProps) {
         <p className="text-xs text-gray-600 mb-3">AI assistant to optimize and execute your task</p>
 
         {/* Tool Selector */}
-        {availableTools.length > 0 && (
-          <div className="mb-3">
-            <p className="text-xs font-medium text-gray-700 mb-1">Available Tools:</p>
-            <div className="flex flex-wrap gap-1">
-              {availableTools.slice(0, 6).map((tool) => (
-                <button
-                  key={tool}
-                  onClick={() => toggleTool(tool)}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    selectedTools.includes(tool)
-                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {tool}
-                </button>
-              ))}
+        <div className="mb-3">
+          {availableTools.length > 0 ? (
+            <>
+              <p className="text-xs font-medium text-gray-700 mb-1">Available ACI Tools:</p>
+              <div className="flex flex-wrap gap-1">
+                {availableTools.slice(0, 8).map((tool) => (
+                  <button
+                    key={tool}
+                    onClick={() => toggleTool(tool)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      selectedTools.includes(tool)
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {tool}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+              <div className="flex items-center text-yellow-800 text-xs">
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span>
+                  <strong>ACI API Key Required:</strong> Please configure your ACI API key in admin settings to enable tool integration.
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Messages */}

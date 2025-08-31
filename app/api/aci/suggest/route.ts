@@ -16,28 +16,42 @@ export async function POST(req: NextRequest) {
   const intent = intentRes.choices[0]?.message?.content?.trim() || `${card.title}`;
 
   const aciKey = process.env.ACI_API_KEY;
-  let aciApps: Array<{ app_name: string; reason?: string }> = [];
-  if (aciKey) {
-    try {
-      // Best-effort call: if ACI REST endpoint available
-      const res = await fetch('https://api.aci.dev/apps/search', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${aciKey}` },
-        body: JSON.stringify({ intent, limit: 10, include_functions: false }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        aciApps = (json?.apps ?? []).map((a: any) => ({ app_name: a.app_name || a.app || a.name }));
-      }
-    } catch {}
+  if (!aciKey) {
+    return new Response(JSON.stringify({
+      error: 'ACI API key is required but not configured. Please add your ACI API key in admin settings.'
+    }), { status: 400 });
   }
 
-  // Fallback: use OpenAI to suggest app names heuristically
-  if (aciApps.length === 0) {
-    const suggestMsg = `List up to 5 likely ACI app names (uppercase snake case, e.g., BRAVE_SEARCH, GMAIL) relevant to: ${intent}. Respond as comma-separated list.`;
-    const sres = await client.chat.completions.create({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: suggestMsg }] });
-    const text = sres.choices[0]?.message?.content || '';
-    aciApps = text.split(',').map((t) => ({ app_name: t.trim().toUpperCase().replace(/\s+/g, '_') })).filter((a) => a.app_name);
+  let aciApps: Array<{ app_name: string; reason?: string }> = [];
+
+  try {
+    // REQUIRED: ACI API call - no fallback to OpenAI
+    const res = await fetch('https://api.aci.dev/apps/search', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${aciKey}` },
+      body: JSON.stringify({ intent, limit: 10, include_functions: false }),
+    });
+
+    if (!res.ok) {
+      return new Response(JSON.stringify({
+        error: `ACI API error: ${res.status} ${res.statusText}`
+      }), { status: res.status });
+    }
+
+    const json = await res.json();
+    aciApps = (json?.apps ?? []).map((a: any) => ({ app_name: a.app_name || a.app || a.name }));
+
+    // If no apps found, return error instead of fallback
+    if (aciApps.length === 0) {
+      return new Response(JSON.stringify({
+        error: 'No ACI apps found for this intent. Try refining your task description.'
+      }), { status: 404 });
+    }
+
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: `Failed to connect to ACI API: ${error.message}`
+    }), { status: 500 });
   }
 
   return Response.json({ intent, apps: aciApps });

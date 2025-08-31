@@ -37,8 +37,9 @@ const apiConfigs: ApiKeyConfig[] = [
     key: 'aci_key',
     label: 'ACI API Key',
     placeholder: 'aci_...',
-    helpText: 'Used for external API integrations and automation',
-    getLink: 'https://platform.aci.dev'
+    helpText: 'REQUIRED: Used for external API integrations and automation tools',
+    getLink: 'https://platform.aci.dev',
+    required: true
   },
   {
     key: 'elevenlabs_key',
