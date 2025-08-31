@@ -24,9 +24,29 @@ export async function POST(req: NextRequest) {
 
   if (!cardId) return Response.json({ ok: true, workspace_id: ws });
 
-  // For now, just return success without creating spaces/datasources
-  // The Dust API methods available are different than expected
-  return Response.json({ ok: true, workspace_id: ws });
+  // Get agent configurations for this workspace
+  const agentsResult = await client.getAgentConfigurations();
+  if (agentsResult.isErr()) {
+    console.error('Dust API error:', agentsResult.error.message);
+    return Response.json({ ok: true, workspace_id: ws, note: 'Dust API error' });
+  }
+
+  const activeAgents = agentsResult.value.filter(agent => agent.status === 'active');
+
+  // Store agent configurations for this card
+  await supabase.from('dust_spaces').upsert({
+    card_id: cardId,
+    workspace_id: ws,
+    space_id: `agents_${cardId}`,
+    agents: activeAgents
+  });
+
+  return Response.json({
+    ok: true,
+    workspace_id: ws,
+    agents_count: activeAgents.length,
+    agents: activeAgents.map(a => ({ name: a.name, sId: a.sId }))
+  });
 }
 
 

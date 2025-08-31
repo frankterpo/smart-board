@@ -11,19 +11,12 @@ import AdminKeysPanel from '@/components/AdminKeysPanel';
 const queryClient = new QueryClient();
 
 export default function HomePage() {
-  // For now, skip Supabase sync and API calls if keys aren't configured
-  // This allows the app to load even without all API keys set up
-  const enableSupabase = false; // Set to true when Supabase keys are configured
-  const enableDust = false; // Set to true when Dust API key is configured
-
-  if (enableSupabase) {
-    useSupabaseCardSync();
-  }
+  // Now enable Supabase and Dust since environment variables are configured
+  useSupabaseCardSync();
 
   React.useEffect(() => {
-    if (enableDust) {
-      fetch('/api/dust/ensure', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ boardId: 'b1' }) }).catch(()=>{});
-    }
+    // Ensure Dust workspace on load
+    fetch('/api/dust/ensure', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ boardId: 'b1' }) }).catch(()=>{});
   }, []);
   return (
     <QueryClientProvider client={queryClient}>
