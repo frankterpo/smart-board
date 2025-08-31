@@ -22,3 +22,4 @@
   "entities": ["Board", "List", "Card", "Checklist", "Label", "User"],
   "events": ["card:created", "card:moved", "card:updated", "checklist:updated", "board:updated"]
 }
+

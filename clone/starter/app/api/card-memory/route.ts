@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   let vectorStoreId = data?.vector_store_id as string | null | undefined;
   if (action === 'ensure') {
     if (!vectorStoreId) {
-      const vs = await client.vector_stores.create({ name: `card:${cardId}` });
+      const vs = await client.vectorStores.create({ name: `card:${cardId}` });
       vectorStoreId = vs.id;
       await supabase.from('cards').update({ vector_store_id: vectorStoreId }).eq('id', cardId);
     }
@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
       file: new Blob([text], { type: 'text/plain' }) as any,
       purpose: 'assistants',
     });
-    await client.vector_stores.files.create_and_poll({ vector_store_id: vectorStoreId, file_id: file.id });
+    await (client.vectorStores.files as any).createAndPoll(vectorStoreId, file.id);
     return Response.json({ ok: true });
   }
 
   if (action === 'search') {
-    const results = await client.vector_stores.search({ vector_store_id: vectorStoreId, query: text ?? '' });
+    const results = await (client.vectorStores as any).search(vectorStoreId, text ?? '');
     return Response.json({ ok: true, results });
   }
 
