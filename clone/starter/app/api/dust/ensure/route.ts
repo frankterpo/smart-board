@@ -24,28 +24,18 @@ export async function POST(req: NextRequest) {
 
   if (!cardId) return Response.json({ ok: true, workspace_id: ws });
 
-  // Get agent configurations for this workspace
-  const agentsResult = await client.getAgentConfigurations();
-  if (agentsResult.isErr()) {
-    console.error('Dust API error:', agentsResult.error.message);
-    return Response.json({ ok: true, workspace_id: ws, note: 'Dust API error' });
-  }
-
-  const activeAgents = agentsResult.value.filter(agent => agent.status === 'active');
-
-  // Store agent configurations for this card
+  // For now, just store the workspace mapping without trying to get agents
+  // The Dust API integration needs more research for the exact method signatures
   await supabase.from('dust_spaces').upsert({
     card_id: cardId,
     workspace_id: ws,
-    space_id: `agents_${cardId}`,
-    agents: activeAgents
+    space_id: `card_${cardId}`,
   });
 
   return Response.json({
     ok: true,
     workspace_id: ws,
-    agents_count: activeAgents.length,
-    agents: activeAgents.map(a => ({ name: a.name, sId: a.sId }))
+    note: 'Dust workspace linked - agent integration pending API research'
   });
 }
 
