@@ -33,14 +33,7 @@ const apiConfigs: ApiKeyConfig[] = [
     helpText: 'Your Dust workspace identifier for agent configuration',
     getLink: 'https://dust.tt/workspaces'
   },
-  {
-    key: 'aci_key',
-    label: 'ACI API Key',
-    placeholder: 'aci_...',
-    helpText: 'REQUIRED: Used for external API integrations and automation tools',
-    getLink: 'https://platform.aci.dev',
-    required: true
-  },
+  // ACI platform key removed - using OpenAI agents for ACI app management
   {
     key: 'elevenlabs_key',
     label: 'ElevenLabs API Key',

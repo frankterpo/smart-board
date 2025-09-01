@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
-import { searchACITools } from '@/lib/aci';
 
 interface Message {
   id: string;
@@ -29,11 +28,9 @@ export default function AgentChat({ cardId }: AgentChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [availableTools, setAvailableTools] = useState<string[]>([]);
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
-  const [aciAgent, setAciAgent] = useState<any>(null);
-  const [aciApps, setAciApps] = useState<any[]>([]);
-  const [showToolSelector, setShowToolSelector] = useState(false);
+  const [cardAgent, setCardAgent] = useState<any>(null);
+  const [configuredApps, setConfiguredApps] = useState<any[]>([]);
+  const [showAppManager, setShowAppManager] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const card = useStore((s) => s.cards[cardId]);
   const updateCard = useStore((s) => s.updateCard);
@@ -61,11 +58,11 @@ export default function AgentChat({ cardId }: AgentChatProps) {
     loadAvailableTools();
   }, [cardId]);
 
-  // Initialize ACI agent for this card
+  // Initialize card agent
   useEffect(() => {
     if (card) {
-      initializeACIAgent();
-      loadACITools();
+      initializeCardAgent();
+      loadConfiguredApps();
     }
   }, [card]);
 
@@ -84,32 +81,17 @@ export default function AgentChat({ cardId }: AgentChatProps) {
     }
   };
 
-  const loadAvailableTools = async () => {
+  const loadConfiguredApps = async () => {
     try {
-      const response = await fetch('/api/aci/suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardId })
-      });
+      const response = await fetch(`/api/agent/configure-app?cardId=${cardId}`);
       const data = await response.json();
 
-      if (data.error) {
-        console.error('ACI API Error:', data.error);
-        // Show error message about missing ACI key
-        if (data.error.includes('ACI API key is required')) {
-          setAvailableTools([]);
-          // Could show a toast or error message here
-          console.warn('ACI key is required but not configured');
-        }
-        return;
-      }
-
       if (data.apps) {
-        setAvailableTools(data.apps.map((app: any) => app.app_name));
+        setConfiguredApps(data.apps);
       }
     } catch (error) {
-      console.error('Failed to load available tools:', error);
-      setAvailableTools([]);
+      console.error('Failed to load configured apps:', error);
+      setConfiguredApps([]);
     }
   };
 
@@ -125,30 +107,25 @@ export default function AgentChat({ cardId }: AgentChatProps) {
           cardId,
           title: card.title,
           description: card.description || '',
-          availableTools
+          configuredApps: configuredApps.map(app => app.app_name)
         })
       });
 
       const data = await response.json();
 
-      let analysisContent = data.analysis;
-      if (data.error) {
-        analysisContent = `⚠️ **Configuration Required**: ${data.error}\n\nPlease add your ACI API key in the admin settings to enable tool integration and get better task optimization suggestions.`;
-      }
-
       const analysisMessage: Message = {
         id: `analysis-${Date.now()}`,
         role: 'assistant',
-        content: analysisContent,
+        content: data.analysis || 'Card analyzed successfully.',
         provider: 'openai',
         timestamp: new Date().toISOString(),
-        type: data.error ? 'regular' : 'analysis',
+        type: 'analysis',
         proposedChanges: data.suggestedChanges
       };
 
       setMessages([analysisMessage]);
 
-      // Also save to database
+      // Save to database
       await supabase.from('chat_messages').insert({
         id: analysisMessage.id,
         card_id: cardId,
@@ -160,6 +137,14 @@ export default function AgentChat({ cardId }: AgentChatProps) {
 
     } catch (error) {
       console.error('Failed to analyze card:', error);
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'Failed to analyze card. Please try again.',
+        provider: 'openai',
+        timestamp: new Date().toISOString()
+      };
+      setMessages([errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -191,20 +176,14 @@ export default function AgentChat({ cardId }: AgentChatProps) {
         timestamp: userMessage.timestamp,
       });
 
-      // Send to OpenAI with enhanced context
-      const response = await fetch('/api/chat', {
+      // Send to card agent
+      const response = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           cardId,
           message: userMessage.content,
-          provider: 'openai',
-          history: messages.slice(-10), // Last 10 messages for context
-          availableTools: selectedTools.length > 0 ? selectedTools : availableTools,
-          cardContext: {
-            title: card?.title,
-            description: card?.description
-          }
+          conversationHistory: messages.slice(-10) // Last 10 messages for context
         }),
       });
 
@@ -296,99 +275,71 @@ export default function AgentChat({ cardId }: AgentChatProps) {
     }
   };
 
-  const toggleTool = (toolName: string) => {
-    setSelectedTools(prev =>
-      prev.includes(toolName)
-        ? prev.filter(t => t !== toolName)
-        : [...prev, toolName]
-    );
-  };
-
-  const initializeACIAgent = async () => {
+  const initializeCardAgent = async () => {
     try {
-      const response = await fetch('/api/aci/agents', {
+      const response = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cardId,
-          title: card.title,
-          description: card.description
+          message: 'Initialize agent for this card',
+          conversationHistory: []
         })
       });
 
       const data = await response.json();
       if (data.agent) {
-        setAciAgent(data.agent);
+        setCardAgent(data.agent);
       }
     } catch (error) {
-      console.error('Failed to initialize ACI agent:', error);
+      console.error('Failed to initialize card agent:', error);
     }
   };
 
-  const loadACITools = async () => {
+  const configureApp = async (appName: string) => {
     try {
-      // Search for relevant ACI tools based on card content
-      const intent = `${card.title} ${card.description || ''}`.trim();
-      const tools = await searchACITools(intent, undefined, 8);
-      setAciApps(tools);
+      const instructions = prompt(`How would you like to configure ${appName}? Describe what you need it for:`);
+      if (!instructions) return;
 
-      // Get subscribed apps for this card
-      const response = await fetch(`/api/aci/apps?cardId=${cardId}`);
-      const data = await response.json();
-      if (data.apps) {
-        setAvailableTools(data.apps.map((app: any) => app.app_name));
-      }
-    } catch (error) {
-      console.error('Failed to load ACI tools:', error);
-    }
-  };
-
-  const subscribeToApp = async (appName: string) => {
-    try {
-      const response = await fetch('/api/aci/apps', {
+      const response = await fetch('/api/agent/configure-app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cardId,
           appName,
-          securityScheme: 'API_KEY' // Default to API_KEY, user can change later
+          userInstructions: instructions
         })
       });
 
       const data = await response.json();
-      if (data.app) {
-        setAvailableTools(prev => [...prev, appName]);
-        setAciApps(prev => prev.filter(app => app.app_name !== appName));
+
+      // Add configuration result to chat
+      const configMessage: Message = {
+        id: `config-${Date.now()}`,
+        role: 'assistant',
+        content: `App Configuration: ${appName}\n\n${data.message}`,
+        provider: 'openai',
+        timestamp: new Date().toISOString(),
+        type: 'regular'
+      };
+
+      setMessages(prev => [...prev, configMessage]);
+
+      // Refresh configured apps
+      if (data.success) {
+        loadConfiguredApps();
       }
+
     } catch (error) {
-      console.error('Failed to subscribe to app:', error);
-    }
-  };
-
-  const setupAppCredentials = async (appName: string) => {
-    try {
-      const apiKey = prompt(`Enter your API key for ${appName}:`);
-      if (!apiKey) return;
-
-      const response = await fetch('/api/aci/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cardId,
-          appName,
-          securityScheme: 'API_KEY',
-          apiKey,
-          linkedAccountOwnerId: `user-${cardId}`
-        })
-      });
-
-      const data = await response.json();
-      if (data.account) {
-        alert(`✅ ${appName} credentials configured successfully!`);
-      }
-    } catch (error) {
-      console.error('Failed to setup app credentials:', error);
-      alert(`❌ Failed to configure ${appName} credentials`);
+      console.error('Failed to configure app:', error);
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: `Failed to configure ${appName}. Please try again.`,
+        provider: 'openai',
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     }
   };
 
@@ -399,43 +350,43 @@ export default function AgentChat({ cardId }: AgentChatProps) {
         <h3 className="font-semibold text-sm mb-2">Task Agent</h3>
         <p className="text-xs text-gray-600 mb-3">AI assistant to optimize and execute your task</p>
 
-        {/* ACI Agent Status */}
-        {aciAgent && (
-          <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-center text-xs text-green-800">
+        {/* Card Agent Status */}
+        {cardAgent && (
+          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-center text-xs text-blue-800">
               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              ACI Agent Active
+              {cardAgent.name} Active
             </div>
           </div>
         )}
 
-        {/* ACI Tools Management */}
+        {/* App Configuration Management */}
         <div className="mb-3">
           <button
-            onClick={() => setShowToolSelector(!showToolSelector)}
-            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors mb-2"
+            onClick={() => setShowAppManager(!showAppManager)}
+            className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 transition-colors mb-2"
           >
-            {showToolSelector ? 'Hide' : 'Show'} ACI Tools
+            {showAppManager ? 'Hide' : 'Show'} App Manager
           </button>
 
-          {showToolSelector && (
+          {showAppManager && (
             <div className="space-y-2">
-              {/* Subscribed Apps */}
-              {availableTools.length > 0 && (
+              {/* Configured Apps */}
+              {configuredApps.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">Subscribed Apps:</p>
+                  <p className="text-xs font-medium text-gray-700 mb-1">Configured Apps:</p>
                   <div className="flex flex-wrap gap-1">
-                    {availableTools.map((tool) => (
-                      <div key={tool} className="flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                        <span>{tool}</span>
+                    {configuredApps.map((app) => (
+                      <div key={app.app_name} className="flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                        <span>{app.app_name}</span>
                         <button
-                          onClick={() => setupAppCredentials(tool)}
+                          onClick={() => configureApp(app.app_name)}
                           className="ml-1 text-green-600 hover:text-green-800"
-                          title="Setup API Key"
+                          title="Reconfigure"
                         >
-                          🔑
+                          ⚙️
                         </button>
                       </div>
                     ))}
@@ -443,24 +394,22 @@ export default function AgentChat({ cardId }: AgentChatProps) {
                 </div>
               )}
 
-              {/* Available Apps to Subscribe */}
-              {aciApps.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">Available Apps:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {aciApps.slice(0, 6).map((app) => (
-                      <button
-                        key={app.app_name}
-                        onClick={() => subscribeToApp(app.app_name)}
-                        className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs hover:bg-gray-200 transition-colors"
-                        title={app.description || app.app_name}
-                      >
-                        + {app.app_name}
-                      </button>
-                    ))}
-                  </div>
+              {/* Quick App Setup */}
+              <div>
+                <p className="text-xs font-medium text-gray-700 mb-1">Quick Setup:</p>
+                <div className="flex flex-wrap gap-1">
+                  {['GMAIL', 'BRAVE_SEARCH', 'SLACK', 'NOTION', 'GITHUB', 'TWITTER'].map((appName) => (
+                    <button
+                      key={appName}
+                      onClick={() => configureApp(appName)}
+                      className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs hover:bg-gray-200 transition-colors"
+                      title={`Configure ${appName}`}
+                    >
+                      + {appName}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>

@@ -113,17 +113,34 @@ create table if not exists public.settings (
   updated_at timestamp with time zone default now()
 );
 
--- ACI Card Agents (each card gets its own ACI agent)
-create table if not exists public.aci_card_agents (
+-- OpenAI Card Agents (each card gets its own OpenAI agent)
+create table if not exists public.card_agents (
   id text primary key default gen_random_uuid()::text,
   card_id text references public.cards(id) on delete cascade,
   agent_name text not null,
   description text,
   intent text, -- derived from card title/description
   status text not null check (status in ('active','inactive','error')) default 'active',
+  personality text, -- agent personality/traits
+  capabilities text[], -- array of capabilities
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
+
+-- Vector Memory for Card Agents (stores all interactions)
+create table if not exists public.card_memory (
+  id text primary key default gen_random_uuid()::text,
+  card_id text references public.cards(id) on delete cascade,
+  content text not null, -- the interaction/memory content
+  content_type text not null check (content_type in ('voice_transcript','chat_message','app_config','task_execution','analysis')),
+  metadata jsonb default '{}'::jsonb, -- additional context
+  embedding vector(1536), -- OpenAI embeddings
+  created_at timestamp with time zone default now()
+);
+
+-- Create vector extension and index
+create extension if not exists vector;
+create index if not exists card_memory_embedding_idx on public.card_memory using ivfflat (embedding vector_cosine_ops);
 
 -- ACI App Configurations (per card subscriptions)
 create table if not exists public.aci_app_configurations (
@@ -169,7 +186,10 @@ create table if not exists public.aci_function_executions (
 );
 
 -- Indexes for performance
-create index if not exists aci_card_agents_card_id_idx on public.aci_card_agents(card_id);
+create index if not exists card_agents_card_id_idx on public.card_agents(card_id);
+create index if not exists card_memory_card_id_idx on public.card_memory(card_id);
+create index if not exists card_memory_type_idx on public.card_memory(content_type);
+create index if not exists card_memory_created_at_idx on public.card_memory(created_at desc);
 create index if not exists aci_app_configurations_card_id_idx on public.aci_app_configurations(card_id);
 create index if not exists aci_linked_accounts_card_id_idx on public.aci_linked_accounts(card_id);
 create index if not exists aci_function_executions_card_id_idx on public.aci_function_executions(card_id);
