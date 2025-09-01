@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     return new Response(JSON.stringify({
-      error: `Failed to connect to ACI API: ${error.message}`
+      error: `Failed to connect to ACI API: ${error instanceof Error ? error.message : 'Unknown error'}`
     }), { status: 500 });
   }
 

@@ -53,9 +53,9 @@ export default function AgentChat({ cardId }: AgentChatProps) {
     }
   }, [card, messages.length]);
 
-  // Load available tools
+  // Load configured apps (replaces old ACI tools)
   useEffect(() => {
-    loadAvailableTools();
+    loadConfiguredApps();
   }, [cardId]);
 
   // Initialize card agent

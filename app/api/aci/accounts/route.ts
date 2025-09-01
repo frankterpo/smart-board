@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     // Return OAuth URL if needed
-    const response = { account: data };
+    const response: any = { account: data };
     if (securityScheme === 'OAUTH2' && typeof aciResult === 'string') {
       response.oauthUrl = aciResult;
     }

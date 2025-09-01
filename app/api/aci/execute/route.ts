@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         app_name: functionName.split('__')[0],
         arguments: functionArguments,
         success: false,
-        error_message: executionError.message,
+        error_message: executionError instanceof Error ? executionError.message : 'Unknown error',
         execution_time_ms: executionTime
       });
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     console.error('Failed to execute ACI function:', error);
     return NextResponse.json({
       success: false,
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

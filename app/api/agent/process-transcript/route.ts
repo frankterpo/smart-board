@@ -105,7 +105,7 @@ Return format: JSON array of objects with 'title', 'description', 'priority', an
   } catch (error) {
     console.error('Transcript processing error:', error);
     return NextResponse.json(
-      { error: 'Failed to process transcript', details: error.message },
+      { error: 'Failed to process transcript', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

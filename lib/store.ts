@@ -55,6 +55,7 @@ interface StoreState {
 	createCard: (listId: Id, title: string, description?: string) => Card;
 	moveCard: (cardId: Id, toListId: Id, position: number) => void;
 	updateCard: (cardId: Id, changes: Partial<Card>) => void;
+	markCardNotNew: (cardId: Id) => void;
 	openModal: (cardId: Id) => void;
 	closeModal: () => void;
 	archiveCard: (cardId: Id) => void;

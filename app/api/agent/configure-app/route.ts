@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('App configuration error:', error);
     return NextResponse.json(
-      { error: 'Failed to configure app', details: error.message },
+      { error: 'Failed to configure app', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

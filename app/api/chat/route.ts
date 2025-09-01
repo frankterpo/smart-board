@@ -163,8 +163,7 @@ If no improvements needed, respond with: {}`;
     return NextResponse.json({
       response,
       metadata,
-      provider,
-      proposedChanges
+      provider
     });
 
   } catch (error) {
